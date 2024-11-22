@@ -1,52 +1,63 @@
 import requests
 from bs4 import BeautifulSoup
 
-
-class Item:
-    def __init__(self, titulo, descripcion, precio):
-        self.titulo = titulo
-        self.descripcion = descripcion
-        self.precio = precio
-
-    def __str__(self):
-        return f"{self.titulo}, {self.descripcion}, {self.precio}"
+resp = requests.get('https://listado.mercadolibre.com.ec/computacion-notebooks/laptops_NoIndex_True')
+base_url = 'https://listado.mercadolibre.com.ec/computacion-notebooks/laptops_NoIndex_True'
 
 
-listUrl = [
-    'https://listado.mercadolibre.com.ec/computacion-notebooks/laptops_Desde_97_NoIndex_True',
-    # 'https://listado.mercadolibre.com.ec/computacion-notebooks/laptops_Desde_145_NoIndex_True',
-    # 'https://listado.mercadolibre.com.ec/computacion-notebooks/laptops_Desde_193_NoIndex_True'
-]
-for url in listUrl:
-    resp = requests.get(url)
+def extract_urls_from_pagination(base_url):
+    all_urls = []
+    response = requests.get(base_url)
+    soup = BeautifulSoup(response.content, 'html.parser')
 
-    listaItems = []
-    if resp.status_code == 200:
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        items = soup.find_all('li', class_='ui-search-layout__item')
+    # Aquí debes ajustar el selector según la estructura de tu HTML
+    links = soup.find_all('a', class_='andes-pagination__link')  # Ejemplo de selector
 
-        for item in items:
-            titulo = item.find('span', class_='poly-component__brand')
+    for link in links[1:-1]:
+        href = link.get('href')
+        all_urls.append(href)
 
-            if titulo:
-                tituloTxt = titulo.get_text(strip=True)
+    return all_urls
 
-                descripH2 = item.find('h2', class_='poly-box poly-component__title')
 
-                if descripH2:  # Verifica si se encontró el <h2>
-                    descrip = descripH2.find('a')
+def extract_products_links(all_urls):
+    products_links = []
+    for result in all_urls:
+        response = requests.get(result)
+        page = BeautifulSoup(response.text, 'html.parser')
+        items = page.find_all('li', class_='ui-search-layout__item')
+        for item in items[:1]:
+            descrip = item.find('a')
 
-                    if descrip:  # Verifica si se encontró el <a>
+            href = descrip.get('href')
+            products_links.append(href)
 
-                        descripTxt = descrip.get_text(strip=True)
-                        precio = item.find('span', class_='andes-money-amount__fraction')
+    return products_links
 
-                        if precio:
-                            preciotxt = precio.get_text(strip=True)
 
-                            listaItems.append(Item(tituloTxt, descripTxt, preciotxt))
+def get_detail_item(products):
+    for item in products[:1]:
+        response = requests.get(item)
+        page = BeautifulSoup(response.text, 'html.parser')
 
-        for persona in listaItems:
-            print(persona)
-    else:
-        print("Error")
+        desc = page.find('h1')
+        title = desc.get_text(strip=True)
+
+        find_seller = page.find('button', class_='ui-pdp-seller__link-trigger-button')
+        seller = find_seller.find_all('span')[1]
+        name_sell = seller.text.strip()
+
+        status_product = page.find('span', class_='ui-pdp-subtitle')
+        statustext = status_product.text.strip()
+
+        price_meta = page.find('meta', itemprop='price')
+        if price_meta:
+            price = price_meta['content']
+        else:
+            price = None
+
+
+
+urls = extract_urls_from_pagination(base_url)
+links_products = extract_products_links(urls)
+get_detail_item(links_products)
